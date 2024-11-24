@@ -1,1 +1,1 @@
-worker: python insane.py
+worker: python clutch.py
