@@ -396,70 +396,162 @@ def show_status(message):
     else:
         bot.reply_to(message, "You are not authorized to view the status.")
 
+@bot.message_handler(commands=['start'])
+def welcome_start(message):
+    user_id = str(message.chat.id)
+    users = read_users()
+    user_name = message.from_user.first_name
+    
+    if user_id in admin_owner or user_id in users:
+        response = f"""Welcome to Our BOT, {user_name}
+🔰 Run This Command : /help
+🔰 JOIN CHANNEL - @MATRIX_CHEATS
+🔰 BUY / OWNER - @its_MATRIX_King
+
+✅ You are an authorized user with full access."""
+    else:
+        response = f"""⚠️ Unauthorized Access!
+
+Dear {user_name},
+You are not authorized to use this bot.
+Please contact @its_MATRIX_King to purchase access.
+
+🔰 Run /plan For Our Details
+🔰 JOIN CHANNEL - @MATRIX_CHEATS
+🔰 Owner - @its_MATRIX_King"""
+
+    bot.reply_to(message, response)
+
 @bot.message_handler(commands=['help'])
 def show_help(message):
     try:
         user_id = str(message.chat.id)
+        users = read_users()
 
-        # Basic help text for all users
-        help_text = '''Available Commands:
-    - /matrix : Execute a BGMI server attack (specific conditions apply).
-    - /rulesanduse : View usage rules and important guidelines.
-    - /plan : Check available plans and pricing for the bot.
-    - /status : View ongoing attack details.
-    - /id : Retrieve your user ID.
-    '''
+        if user_id in admin_owner or user_id in users:
+            # Help text for authorized users
+            if user_id in admin_owner:
+                help_text = '''✅ ADMIN COMMANDS:
 
-        # Check if the user is an admin and append admin commands
-        if user_id in admin_id:
-            help_text += '''
-Admin Commands:
-    - /add <user_id> <time_in_minutes> : Add a user with specified time.
-    - /remove <user_id> : Remove a user from the authorized list.
-    - /allusers : List all authorized users.
-    - /broadcast : Send a broadcast message to all users.
-    '''
+🔰 /matrix - Execute BGMI server attack
+🔰 /status - View ongoing attack details
+🔰 /add - Add new user with time limit
+🔰 /remove - Remove user access
+🔰 /allusers - List all authorized users
+🔰 /broadcast - Send message to all users
+🔰 /rulesanduse - View usage guidelines
+🔰 /plan - Check available plans
+🔰 /id - Get your user ID
 
-        # Footer with channel and owner information
-        help_text += ''' 
 JOIN CHANNEL - @MATRIX_CHEATS
-BUY / OWNER - @its_MATRIX_King
-'''
+OWNER - @its_MATRIX_King'''
+            else:
+                help_text = '''✅ USER COMMANDS:
 
-        # Send the constructed help text to the user
+🔰 /matrix - Execute BGMI server attack
+🔰 /status - View ongoing attack details
+🔰 /rulesanduse - View usage guidelines
+🔰 /plan - Check available plans
+🔰 /id - Get your user ID
+
+JOIN CHANNEL - @MATRIX_CHEATS
+OWNER - @its_MATRIX_King'''
+        else:
+            help_text = '''⚠️ Unauthorized Access!
+
+You do not have permission to view bot commands.
+Please contact @its_MATRIX_King to purchase access.
+
+🔰 JOIN CHANNEL - @MATRIX_CHEATS
+🔰 OWNER - @its_MATRIX_King'''
+
         bot.reply_to(message, help_text)
     
     except Exception as e:
         logging.error(f"Error in /help command: {e}")
-        bot.reply_to(message, "An error occurred while fetching help. Please try again.")
-    
-@bot.message_handler(commands=['start'])
-def welcome_start(message):
-    user_name = message.from_user.first_name
-    response = f"Welcome to Our BOT, {user_name}\nRun This Command : /help\nJOIN CHANNEL - @MATRIX_CHEATS\nBUY / OWNER - @its_MATRIX_King "
-    bot.reply_to(message, response)
+        bot.reply_to(message, "An error occurred while processing your request.")
 
 @bot.message_handler(commands=['rulesanduse'])
 def welcome_rules(message):
+    user_id = str(message.chat.id)
+    users = read_users()
     user_name = message.from_user.first_name
-    response = f'''{user_name} Please Follow These Rules:
+    
+    if user_id in admin_owner or user_id in users:
+        response = f'''✅ Rules & Usage Guidelines for {user_name}:
 
-1. Time Should Be 180 or Below
-2. Click /status Before Entering Match
-3. If There Are Any Ongoing Attacks You Cant use Wait For Finish
+⚠️ IMPORTANT RULES:
+1. Maximum attack time is 180 seconds
+2. Always check /status before starting new attack
+3. Wait for ongoing attacks to finish
+4. Do not abuse the service
+
+🔰 USAGE TIPS:
+• Use correct port numbers
+• Verify target before attack
+• Follow cooldown periods
+• Report any issues to admin
+
 JOIN CHANNEL - @MATRIX_CHEATS
-BUY / OWNER - @its_MATRIX_King '''
-   
+OWNER - @its_MATRIX_King'''
+    else:
+        response = f'''⚠️ Unauthorized Access!
+
+Dear {user_name},
+You do not have permission to view the rules.
+Please contact @its_MATRIX_King to purchase access.
+
+🔰 JOIN CHANNEL - @MATRIX_CHEATS
+🔰 OWNER - @its_MATRIX_King'''
+
     bot.reply_to(message, response)
 
 @bot.message_handler(commands=['plan'])
 def welcome_plan(message):
     user_name = message.from_user.first_name
-    response = f'''{user_name}, 
-    Purchase VIP DDOS Plan From @its_Matrix_King
-    Join Channel @MATRIX_CHEATS
-'''
+    response = f'''💰 VIP PLANS & PRICING
+
+Dear {user_name},
+Contact @its_MATRIX_King for current plans and pricing.
+
+✨ BENEFITS:
+• Premium Support
+• Priority Access
+• Extended Features
+• Reliable Service
+
+🔰 JOIN CHANNEL - @MATRIX_CHEATS
+🔰 OWNER - @its_MATRIX_King'''
+    
     bot.reply_to(message, response)
+
+@bot.message_handler(commands=['id'])
+def show_user_id(message):
+    user_id = str(message.chat.id)
+    response = f'''🆔 USER IDENTIFICATION
+
+Your Telegram ID: {user_id}
+
+Use this ID when purchasing access.
+Contact @its_MATRIX_King for activation.'''
+    
+    bot.reply_to(message, response)
+
+def check_authorization(user_id):
+    """Helper function to check if user is authorized"""
+    users = read_users()
+    return user_id in admin_owner or user_id in users
+
+def unauthorized_message(user_name):
+    """Helper function to generate unauthorized message"""
+    return f'''⚠️ Unauthorized Access!
+
+Dear {user_name},
+You do not have permission to use this command.
+Please contact @its_MATRIX_King to purchase access.
+
+🔰 JOIN CHANNEL - @MATRIX_CHEATS
+🔰 OWNER - @its_MATRIX_King'''
 
 @bot.message_handler(commands=['admincmd'])
 def welcome_plan(message):
