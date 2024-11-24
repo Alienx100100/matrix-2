@@ -14,7 +14,7 @@ import asyncio
 import pytz  # Import pytz for timezone handling
 
 bot = telebot.TeleBot('7599785141:AAHc6PvVkhdil2ZD69eNp9kXF-CBu9Wbt2w')
-USERNAME = "@matrix_cheats"
+
 # Admin user IDs
 admin_id = ["7418099890"]
 admin_owner = ["7418099890"]
