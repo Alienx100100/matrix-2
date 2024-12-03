@@ -10,13 +10,7 @@ import datetime
 import logging
 import socket
 
-if len(sys.argv) > 1:
-    bot_token = sys.argv[1]
-else:
-    print("Error: No bot token provided.")
-    sys.exit(1)
-
-bot = telebot.TeleBot(7599785141:AAFtrJQYnDy3Osx8vP3FOC8zFcLg1l9bGJc, threaded=False)
+bot = "7599785141:AAFtrJQYnDy3Osx8vP3FOC8zFcLg1l9bGJc"
 
 AUTHORIZED_USERS = [7418099890]
 
