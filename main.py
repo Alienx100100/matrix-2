@@ -10,7 +10,7 @@ import datetime
 import logging
 import socket
 
-bot = "7599785141:AAFtrJQYnDy3Osx8vP3FOC8zFcLg1l9bGJc"
+bot = telebot.TeleBot("7599785141:AAFtrJQYnDy3Osx8vP3FOC8zFcLg1l9bGJc")
 
 AUTHORIZED_USERS = [7418099890]
 
