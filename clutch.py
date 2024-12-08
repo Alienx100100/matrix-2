@@ -286,95 +286,151 @@ def remove_key(message):
         logging.error(f"Error removing key: {e}")
         bot.reply_to(message, "An error occurred while removing the key.")
 
-@bot.message_handler(commands=['allkeys'])
-def show_all_keys(message):
-    user_id = str(message.chat.id)
-    if user_id not in admin_owner:
+@bot.message_handler(commands=['allusers'])
+def show_users(message):
+    if str(message.chat.id) not in admin_id:
         bot.reply_to(message, "⛔️ Access Denied: Admin only command")
         return
 
     try:
+        # Modified query to get reseller username correctly
         cursor.execute("""
-            SELECT key, duration, created_at 
-            FROM unused_keys 
-            WHERE is_used = FALSE 
-            ORDER BY created_at DESC
-        """)
-        keys = cursor.fetchall()
-        
-        if not keys:
-            bot.reply_to(message, "📝 No unused keys available")
-            return
-
-        response = "🔑 Available Keys:\n\n"
-        ist_tz = pytz.timezone('Asia/Kolkata')
-        
-        for key in keys:
-            key_code = key[0]
-            duration_seconds = float(key[1])
-            created_at = key[2].astimezone(ist_tz)
-            
-            # Convert duration to days, hours, minutes
-            days = int(duration_seconds // (24 * 3600))
-            remaining_seconds = duration_seconds % (24 * 3600)
-            hours = int(remaining_seconds // 3600)
-            minutes = int((remaining_seconds % 3600) // 60)
-            
-            response += f"Key: `{key_code}`\n"
-            if days > 0:
-                response += f"Duration: {days}d {hours}h {minutes}m\n"
-            elif hours > 0:
-                response += f"Duration: {hours}h {minutes}m\n"
-            else:
-                response += f"Duration: {minutes}m\n"
-            response += f"Created: {created_at.strftime('%Y-%m-%d %H:%M:%S')} IST\n\n"
-            
-        bot.reply_to(message, response)
-    except Exception as e:
-        bot.reply_to(message, f"❌ Error fetching keys: {str(e)}")
-
-@bot.message_handler(commands=['allusers'])
-def show_users(message):
-    if str(message.chat.id) not in admin_id:
-        bot.reply_to(message, "Only administrators can view users.")
-        return
-
-    try:
-        cursor.execute("""
-            SELECT user_id, username, key, expiration 
-            FROM users 
-            WHERE expiration > NOW() 
-            ORDER BY expiration DESC
+            SELECT 
+                u.user_id, 
+                u.username, 
+                u.key, 
+                u.expiration, 
+                rt.reseller_id,
+                COALESCE(r.username, rs.username) as reseller_username
+            FROM users u
+            LEFT JOIN reseller_transactions rt ON u.key = rt.key_generated
+            LEFT JOIN resellers r ON rt.reseller_id = r.telegram_id
+            LEFT JOIN users rs ON rt.reseller_id = rs.user_id
+            WHERE u.expiration > NOW()
+            ORDER BY rt.reseller_id NULLS FIRST, u.expiration DESC
         """)
         users = cursor.fetchall()
-        
+
         if not users:
             bot.reply_to(message, "📝 No active users found")
             return
 
-        response = "👥 Active Users:\n\n"
+        response = "👥 𝗔𝗰𝘁𝗶𝘃𝗲 𝗨𝘀𝗲𝗿𝘀:\n\n"
         current_time = datetime.now(IST)
+
+        # Direct Users
+        response += "📌 𝗗𝗶𝗿𝗲𝗰𝘁 𝗨𝘀𝗲𝗿𝘀:\n"
+        for user in users:
+            if user[4] is None:  # No reseller
+                remaining = user[3].astimezone(IST) - current_time
+                response += (
+                    f"👤 User: @{user[1]}\n"
+                    f"🆔 ID: {user[0]}\n"
+                    f"🔑 Key: {user[2]}\n"
+                    f"⏳ Remaining: {remaining.days}d {remaining.seconds//3600}h\n"
+                    f"📅 Expires: {user[3].astimezone(IST).strftime('%Y-%m-%d %H:%M:%S')} IST\n\n"
+                )
+
+        # Reseller Users
+        response += "\n🎯 𝗥𝗲𝘀𝗲𝗹𝗹𝗲𝗿 𝗨𝘀𝗲𝗿𝘀:\n"
+        current_reseller = None
         
         for user in users:
-            user_id, username, key, expiration = user
-            expiration = expiration.astimezone(IST)
-            remaining = expiration - current_time
-            
-            # Calculate remaining time components
-            days = remaining.days
-            hours = remaining.seconds // 3600
-            minutes = (remaining.seconds % 3600) // 60
-            
-            response += (f"🆔 ID: {user_id}\n"
-                        f"👤 User: @{username}\n"
-                        f"🔑 Key: {key}\n"
-                        f"⏳ Remaining: {days}d {hours}h {minutes}m\n"
-                        f"📅 Expires: {expiration.strftime('%Y-%m-%d %H:%M:%S')} IST\n\n")
-        
+            if user[4]:  # Has reseller
+                if current_reseller != user[4]:
+                    current_reseller = user[4]
+                    reseller_username = user[5] if user[5] else "Unknown"
+                    response += f"\n💼 𝗥𝗲𝘀𝗲𝗹𝗹𝗲𝗿: @{reseller_username}\n"
+                    response += f"🆔 𝗜𝗗: {user[4]}\n"
+
+                remaining = user[3].astimezone(IST) - current_time
+                response += (
+                    f"👤 User: @{user[1]}\n"
+                    f"🆔 ID: {user[0]}\n"
+                    f"🔑 Key: {user[2]}\n"
+                    f"⏳ Remaining: {remaining.days}d {remaining.seconds//3600}h\n"
+                    f"📅 Expires: {user[3].astimezone(IST).strftime('%Y-%m-%d %H:%M:%S')} IST\n\n"
+                )
+
         bot.reply_to(message, response)
     except Exception as e:
-        logging.error(f"Error fetching users: {e}")
-        bot.reply_to(message, "❌ Error fetching user details")
+        bot.reply_to(message, f"❌ Error fetching users: {str(e)}")
+
+@bot.message_handler(commands=['allkeys'])
+def show_all_keys(message):
+    if str(message.chat.id) not in admin_owner:
+        bot.reply_to(message, "⛔️ Access Denied: Admin only command")
+        return
+
+    try:
+        # Modified query to get reseller username from users table
+        cursor.execute("""
+            SELECT 
+                k.key, 
+                k.duration, 
+                k.created_at, 
+                rt.reseller_id,
+                COALESCE(r.username, u.username) as username
+            FROM unused_keys k
+            LEFT JOIN reseller_transactions rt ON k.key = rt.key_generated
+            LEFT JOIN resellers r ON rt.reseller_id = r.telegram_id
+            LEFT JOIN users u ON rt.reseller_id = u.user_id
+            WHERE k.is_used = FALSE
+            ORDER BY rt.reseller_id NULLS FIRST, k.created_at DESC
+        """)
+        keys = cursor.fetchall()
+
+        if not keys:
+            bot.reply_to(message, "📝 No unused keys available")
+            return
+
+        response = "🔑 𝗔𝘃𝗮𝗶𝗹𝗮𝗯𝗹𝗲 𝗞𝗲𝘆𝘀:\n\n"
+
+        # Direct Generated Keys
+        response += "📌 𝗗𝗶𝗿𝗲𝗰𝘁 𝗚𝗲𝗻𝗲𝗿𝗮𝘁𝗲𝗱:\n"
+        for key in keys:
+            if key[3] is None:  # No reseller
+                duration_seconds = float(key[1])
+                created_at = key[2].astimezone(IST)
+                days = int(duration_seconds // (24 * 3600))
+                remaining = duration_seconds % (24 * 3600)
+                hours = int(remaining // 3600)
+                minutes = int((remaining % 3600) // 60)
+                
+                response += (
+                    f"🔑 Key: `{key[0]}`\n"
+                    f"⏱ Duration: {days}d {hours}h {minutes}m\n"
+                    f"📅 Created: {created_at.strftime('%Y-%m-%d %H:%M:%S')} IST\n\n"
+                )
+
+        # Reseller Generated Keys
+        response += "\n🎯 𝗥𝗲𝘀𝗲𝗹𝗹𝗲𝗿 𝗚𝗲𝗻𝗲𝗿𝗮𝘁𝗲𝗱:\n"
+        current_reseller = None
+        
+        for key in keys:
+            if key[3]:  # Has reseller
+                if current_reseller != key[3]:
+                    current_reseller = key[3]
+                    username = key[4] if key[4] else "Unknown"
+                    response += f"\n💼 𝗥𝗲𝘀𝗲𝗹𝗹𝗲𝗿: @{username}\n"
+                    response += f"🆔 𝗜𝗗: {key[3]}\n"
+
+                duration_seconds = float(key[1])
+                created_at = key[2].astimezone(IST)
+                days = int(duration_seconds // (24 * 3600))
+                remaining = duration_seconds % (24 * 3600)
+                hours = int(remaining // 3600)
+                minutes = int((remaining % 3600) // 60)
+
+                response += (
+                    f"🔑 Key: `{key[0]}`\n"
+                    f"⏱ Duration: {days}d {hours}h {minutes}m\n"
+                    f"📅 Created: {created_at.strftime('%Y-%m-%d %H:%M:%S')} IST\n\n"
+                )
+
+        bot.reply_to(message, response)
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error fetching keys: {str(e)}")
 
 
 ongoing_attacks = []
@@ -520,7 +576,7 @@ def handle_matrix(message):
 𝗘𝘅𝗮𝗺𝗽𝗹𝗲: /matrix 1.1.1.1 80 120
 
 ⚠️ 𝗟𝗶𝗺𝗶𝘁𝗮𝘁𝗶𝗼𝗻𝘀:
-• 𝗠𝗮𝘅 𝘁𝗶𝗺𝗲: 300 𝘀𝗲𝗰𝗼𝗻𝗱𝘀
+• 𝗠𝗮𝘅 𝘁𝗶𝗺𝗲: 200 𝘀𝗲𝗰𝗼𝗻𝗱𝘀
 • 𝗖𝗼𝗼𝗹𝗱𝗼𝘄𝗻: 5 𝗺𝗶𝗻𝘂𝘁𝗲𝘀
 """)
         return
@@ -531,8 +587,8 @@ def handle_matrix(message):
         time = int(args[3])
 
         # Validate time limit
-        if time > 300:
-            bot.reply_to(message, "⚠️ 𝗠𝗮𝘅𝗶𝗺𝘂𝗺 𝗮𝘁𝘁𝗮𝗰𝗸 𝘁𝗶𝗺𝗲 𝗶𝘀 300 𝘀𝗲𝗰𝗼𝗻𝗱𝘀.")
+        if time > 200:
+            bot.reply_to(message, "⚠️ 𝗠𝗮𝘅𝗶𝗺𝘂𝗺 𝗮𝘁𝘁𝗮𝗰𝗸 𝘁𝗶𝗺𝗲 𝗶𝘀 200 𝘀𝗲𝗰𝗼𝗻𝗱𝘀.")
             return
 
         # Check cooldown for non-admin users
@@ -731,6 +787,8 @@ def welcome_start(message):
 📢 𝗝𝗢𝗜𝗡 𝗖𝗛𝗔𝗡𝗡𝗘𝗟:
 ➡️ @MATRIX_CHEATS
 
+👨‍💻 𝗥𝗲𝘀𝗲𝗹𝗹𝗲𝗿𝗣𝗮𝗻𝗲𝗹 𝗕𝘂𝘆: 
+➡️ @its_MATRIX_King
 👨‍💻 𝗢𝗪𝗡𝗘𝗥/𝗕𝗨𝗬:
 ➡️ @its_MATRIX_King
 '''
@@ -749,7 +807,7 @@ def welcome_rules(message):
 👋 𝗛𝗲𝗹𝗹𝗼 {user_name}, 𝗣𝗹𝗲𝗮𝘀𝗲 𝗳𝗼𝗹𝗹𝗼𝘄 𝘁𝗵𝗲𝘀𝗲 𝗿𝘂𝗹𝗲𝘀:
 
 ⏱️ 𝗧𝗶𝗺𝗲 𝗟𝗶𝗺𝗶𝘁:
-• 𝗠𝗮𝘅𝗶𝗺𝘂𝗺 300 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 𝗽𝗲𝗿 𝗮𝘁𝘁𝗮𝗰𝗸
+• 𝗠𝗮𝘅𝗶𝗺𝘂𝗺 200 𝘀𝗲𝗰𝗼𝗻𝗱𝘀 𝗽𝗲𝗿 𝗮𝘁𝘁𝗮𝗰𝗸
 • 5 𝗺𝗶𝗻𝘂𝘁𝗲𝘀 𝗰𝗼𝗼𝗹𝗱𝗼𝘄𝗻 𝗯𝗲𝘁𝘄𝗲𝗲𝗻 𝗮𝘁𝘁𝗮𝗰𝗸𝘀
 
 ⚠️ 𝗜𝗺𝗽𝗼𝗿𝘁𝗮𝗻𝘁:
